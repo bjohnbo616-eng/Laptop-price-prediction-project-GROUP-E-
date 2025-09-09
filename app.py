@@ -8,12 +8,49 @@ model = joblib.load('laptop_price.joblib')
 scaler = joblib.load('scaler.joblib')
 feature_names = joblib.load('feature.joblib')
 
-# Load the dataset to get unique values
-df = pd.read_csv('laptop_price.csv', encoding='ISO-8859-1')
+# Load the dataset to get unique values - handle merge conflict in CSV
+try:
+    # Try reading normally first
+    df = pd.read_csv('laptop_price.csv', encoding='ISO-8859-1')
+    # Check if we have merge conflict markers
+    if df.columns[0].startswith('<'):
+        raise ValueError("Merge conflict detected")
+except:
+    # Read the file and skip merge conflict lines
+    with open('laptop_price.csv', 'r', encoding='ISO-8859-1') as f:
+        lines = f.readlines()
+    
+    # Filter out merge conflict markers
+    clean_lines = []
+    skip = False
+    for line in lines:
+        if line.startswith('<<<<<<< HEAD') or line.startswith('=======') or line.startswith('>>>>>>> '):
+            skip = not skip if line.startswith('=======') else skip
+            continue
+        if not skip:
+            clean_lines.append(line)
+    
+    # Write to a temporary clean file and read it
+    import tempfile
+    import os
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', encoding='ISO-8859-1') as tmp:
+        tmp.writelines(clean_lines)
+        tmp_path = tmp.name
+    
+    df = pd.read_csv(tmp_path, encoding='ISO-8859-1')
+    os.unlink(tmp_path)  # Clean up temp file
 
-# Get unique values for categorical inputs
-companies = sorted(df['Company'].unique())
-type_names = sorted(df['TypeName'].unique())
+# Get unique values for categorical inputs (check which column names exist)
+if 'company' in df.columns:
+    companies = sorted(df['company'].unique())
+    type_names = sorted(df['typename'].unique())
+elif 'Company' in df.columns:
+    companies = sorted(df['Company'].unique())
+    type_names = sorted(df['TypeName'].unique())
+else:
+    st.error("Could not find company column in the dataset")
+    st.stop()
+
 storage_types = ['SSD', 'HDD', 'Flash Storage', 'Hybrid']
 
 # Common screen resolutions
@@ -25,6 +62,11 @@ resolutions = [
 # Streamlit app
 st.title('Laptop Price Prediction App')
 st.write('Enter the laptop specifications to predict the price in Euros.')
+
+# Debug info
+st.sidebar.write("Debug Info:")
+st.sidebar.write(f"Dataset shape: {df.shape}")
+st.sidebar.write(f"Columns: {list(df.columns)}")
 
 # Input widgets
 col1, col2 = st.columns(2)
@@ -69,29 +111,3 @@ if st.button('Predict Price'):
         input_data[f'TypeName_{typ}'] = [1 if type_name == typ else 0]
     for stor in storage_types[1:]:
         input_data[f'Storage_Type_{stor}'] = [1 if storage_type == stor else 0]
-
-    # Ensure all features are present
-    for feat in feature_names:
-        if feat not in input_data.columns:
-            input_data[feat] = 0
-
-    # Reorder columns
-    input_data = input_data[feature_names]
-
-    # Scale
-    input_scaled = scaler.transform(input_data)
-
-    # Predict
-    prediction = model.predict(input_scaled)[0]
-
-    st.success(f'Predicted Price: €{prediction:.2f}')
-
-    # Optional: Show feature contributions
-    st.write('### Feature Contributions')
-    coeffs = model.coef_
-    contributions = input_scaled[0] * coeffs
-    contrib_df = pd.DataFrame({
-        'Feature': feature_names,
-        'Contribution': contributions
-    }).sort_values('Contribution', ascending=False)
-    st.dataframe(contrib_df.head(10))
