@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 
-# Load the model, scaler, and feature names
+# Load the model, scaler, and feature names.
 model = joblib.load('laptop_price.joblib')
 scaler = joblib.load('scaler.joblib')
 feature_names = joblib.load('feature.joblib')
