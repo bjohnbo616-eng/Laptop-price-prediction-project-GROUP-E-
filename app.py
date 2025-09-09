@@ -111,3 +111,28 @@ if st.button('Predict Price'):
         input_data[f'TypeName_{typ}'] = [1 if type_name == typ else 0]
     for stor in storage_types[1:]:
         input_data[f'Storage_Type_{stor}'] = [1 if storage_type == stor else 0]
+    # Ensure all features are present
+    for feat in feature_names:
+        if feat not in input_data.columns:
+            input_data[feat] = 0
+
+    # Reorder columns
+    input_data = input_data[feature_names]
+
+    # Scale
+    input_scaled = scaler.transform(input_data)
+
+    # Predict
+    prediction = model.predict(input_scaled)[0]
+
+    st.success(f'Predicted Price: €{prediction:.2f}')
+
+    # Optional: Show feature contributions
+    st.write('### Feature Contributions')
+    coeffs = model.coef_
+    contributions = input_scaled[0] * coeffs
+    contrib_df = pd.DataFrame({
+        'Feature': feature_names,
+        'Contribution': contributions
+    }).sort_values('Contribution', ascending=False)
+    st.dataframe(contrib_df.head(10))
